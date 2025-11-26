@@ -1,15 +1,16 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audioUtils';
-import { AudioStatus, LogMessage } from '../types';
+import { AudioStatus, LogMessage, VoiceName } from '../types';
 
 interface UseLiveClientProps {
   apiKey: string;
   systemInstruction: string;
+  voiceName: VoiceName;
   onLog: (message: LogMessage) => void;
 }
 
-export const useLiveClient = ({ apiKey, systemInstruction, onLog }: UseLiveClientProps) => {
+export const useLiveClient = ({ apiKey, systemInstruction, voiceName, onLog }: UseLiveClientProps) => {
   const [status, setStatus] = useState<AudioStatus>(AudioStatus.DISCONNECTED);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [isModelSpeaking, setIsModelSpeaking] = useState(false);
@@ -116,7 +117,7 @@ export const useLiveClient = ({ apiKey, systemInstruction, onLog }: UseLiveClien
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }, // Professional sounding voice
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
           },
           systemInstruction: systemInstruction,
           inputAudioTranscription: {}, 
@@ -129,7 +130,7 @@ export const useLiveClient = ({ apiKey, systemInstruction, onLog }: UseLiveClien
         callbacks: {
           onopen: () => {
             setStatus(AudioStatus.CONNECTED);
-            onLog({ role: 'system', text: 'Connected to Gemini Live', timestamp: new Date() });
+            onLog({ role: 'system', text: `Connected to Gemini Live (${voiceName})`, timestamp: new Date() });
 
             // Setup Input Processing (Mic -> Gemini)
             if (!inputContextRef.current) return;
@@ -194,7 +195,10 @@ export const useLiveClient = ({ apiKey, systemInstruction, onLog }: UseLiveClien
                onLog({ role: 'system', text: 'Interruption detected', timestamp: new Date() });
                activeSourcesRef.current.forEach(s => s.stop());
                activeSourcesRef.current.clear();
-               nextStartTimeRef.current = 0;
+               // Reset timing to now, so new audio plays immediately
+               if (outputContextRef.current) {
+                   nextStartTimeRef.current = outputContextRef.current.currentTime;
+               }
             }
           },
           onclose: () => {
@@ -214,7 +218,7 @@ export const useLiveClient = ({ apiKey, systemInstruction, onLog }: UseLiveClien
       setStatus(AudioStatus.ERROR);
       onLog({ role: 'system', text: 'Failed to connect to audio devices', timestamp: new Date() });
     }
-  }, [apiKey, systemInstruction, onLog]);
+  }, [apiKey, systemInstruction, voiceName, onLog]);
 
   return {
     connect,

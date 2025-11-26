@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLiveClient } from './hooks/useLiveClient';
-import { AudioStatus, LogMessage, Scenario } from './types';
-import { SCENARIOS } from './constants';
+import { AudioStatus, LogMessage, Scenario, VoiceName } from './types';
+import { SCENARIOS, VOICES } from './constants';
 import { ScenarioCard } from './components/ScenarioCard';
 import { AudioVisualizer } from './components/AudioVisualizer';
 
 export default function App() {
   const [selectedScenario, setSelectedScenario] = useState<Scenario>(SCENARIOS[0]);
+  const [selectedVoice, setSelectedVoice] = useState<VoiceName>('Kore');
   const [logs, setLogs] = useState<LogMessage[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
   
@@ -20,6 +21,7 @@ export default function App() {
   const { connect, disconnect, status, isUserSpeaking, isModelSpeaking, volume } = useLiveClient({
     apiKey,
     systemInstruction: selectedScenario.systemInstruction,
+    voiceName: selectedVoice,
     onLog: handleLog
   });
 
@@ -58,8 +60,8 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row text-slate-200 overflow-hidden">
       
       {/* Left Sidebar: Settings & Scenarios */}
-      <div className="w-full md:w-80 lg:w-96 p-6 flex flex-col border-r border-slate-800 bg-slate-950/50 backdrop-blur-sm z-10">
-        <div className="mb-8">
+      <div className="w-full md:w-80 lg:w-96 p-6 flex flex-col border-r border-slate-800 bg-slate-950/50 backdrop-blur-sm z-10 h-screen">
+        <div className="mb-6 flex-shrink-0">
           <div className="flex items-center space-x-2 mb-2">
             <span className="text-2xl">⚡</span>
             <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
@@ -69,8 +71,31 @@ export default function App() {
           <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Gemini 2.5 Simulator</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4 pb-4">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-4">Select Scenario</h2>
+        {/* Voice Selector */}
+        <div className="mb-6 flex-shrink-0">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-3">Agent Voice</h2>
+          <div className="grid grid-cols-3 gap-2">
+            {VOICES.map(voice => (
+              <button
+                key={voice}
+                onClick={() => setSelectedVoice(voice)}
+                disabled={isConnected}
+                className={`
+                  px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 border
+                  ${selectedVoice === voice 
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-105 z-10' 
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200'}
+                  ${isConnected ? 'opacity-50 cursor-not-allowed saturate-0' : 'cursor-pointer hover:shadow-sm'}
+                `}
+              >
+                {voice}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4 pb-4 min-h-0">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest sticky top-0 bg-slate-950/95 py-2 z-10">Select Scenario</h2>
           {SCENARIOS.map(scenario => (
             <div key={scenario.id} className={isConnected ? 'opacity-50 pointer-events-none grayscale' : ''}>
                <ScenarioCard 
@@ -82,13 +107,13 @@ export default function App() {
           ))}
         </div>
 
-        <div className="pt-4 border-t border-slate-800 text-xs text-slate-600 text-center">
-          Powered by Google Gemini Multimodal Live API
+        <div className="pt-4 border-t border-slate-800 text-xs text-slate-600 text-center flex-shrink-0">
+          Powered by Gemini Multimodal Live API
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex-1 flex flex-col relative h-screen">
         
         {/* Header / Status Bar */}
         <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20 pointer-events-none">
@@ -98,8 +123,10 @@ export default function App() {
               {status === AudioStatus.CONNECTING ? 'Connecting...' : isConnected ? 'Live Connection' : 'Offline'}
             </span>
           </div>
-          <div className="text-sm font-mono text-slate-500 opacity-50">
-             {selectedScenario.name} Mode
+          <div className="text-sm font-mono text-slate-500 opacity-50 flex items-center space-x-4">
+             <span>{selectedScenario.name}</span>
+             <span>•</span>
+             <span>Voice: {selectedVoice}</span>
           </div>
         </div>
 
@@ -135,16 +162,16 @@ export default function App() {
               
               <p className="text-slate-500 text-sm max-w-xs text-center">
                  {isConnected 
-                   ? "Speak naturally. Interrupt the AI at any time." 
-                   : "Select a scenario from the sidebar and click Start to begin."}
+                   ? "Speak naturally. Interrupt the AI at any time to test its reaction." 
+                   : "Select a scenario and voice, then click Start."}
               </p>
             </div>
           </div>
         </div>
 
         {/* Bottom Panel: Live Transcript */}
-        <div className="h-64 bg-slate-950 border-t border-slate-800 flex flex-col">
-          <div className="px-6 py-2 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+        <div className="h-1/3 bg-slate-950 border-t border-slate-800 flex flex-col z-20 shadow-2xl">
+          <div className="px-6 py-2 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center flex-shrink-0">
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Live Transcript</h3>
             <span className="text-xs text-slate-600">{logs.length} events</span>
           </div>

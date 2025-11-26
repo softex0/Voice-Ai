@@ -18,3 +18,5 @@ export enum AudioStatus {
   CONNECTED = 'connected',
   ERROR = 'error',
 }
+
+export type VoiceName = 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr';
