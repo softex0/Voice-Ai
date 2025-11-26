@@ -28,6 +28,10 @@ export const useLiveClient = ({ apiKey, systemInstruction, voiceName, onLog }: U
   const nextStartTimeRef = useRef<number>(0);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   
+  // Transcription Buffers
+  const currentInputRef = useRef('');
+  const currentOutputRef = useRef('');
+  
   // API Session
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
@@ -41,6 +45,12 @@ export const useLiveClient = ({ apiKey, systemInstruction, voiceName, onLog }: U
       try { source.stop(); } catch (e) { /* ignore */ }
     });
     activeSourcesRef.current.clear();
+
+    // Close session
+    if (sessionPromiseRef.current) {
+      sessionPromiseRef.current.then(session => session.close());
+      sessionPromiseRef.current = null;
+    }
 
     // Close audio contexts
     if (inputContextRef.current) {
@@ -70,6 +80,8 @@ export const useLiveClient = ({ apiKey, systemInstruction, voiceName, onLog }: U
     setIsUserSpeaking(false);
     setIsModelSpeaking(false);
     setVolume(0);
+    currentInputRef.current = '';
+    currentOutputRef.current = '';
   }, []);
 
   const connect = useCallback(async () => {
@@ -84,6 +96,10 @@ export const useLiveClient = ({ apiKey, systemInstruction, voiceName, onLog }: U
       inputContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       // Output: 24kHz required by Gemini Live response
       outputContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+
+      // Ensure contexts are running (vital for some browsers)
+      await inputContextRef.current.resume();
+      await outputContextRef.current.resume();
 
       // Setup Output Node
       outputNodeRef.current = outputContextRef.current.createGain();
@@ -159,12 +175,24 @@ export const useLiveClient = ({ apiKey, systemInstruction, voiceName, onLog }: U
             processor.connect(inputContextRef.current.destination);
           },
           onmessage: async (msg: LiveServerMessage) => {
-            // Handle Transcriptions
+            // Buffer Transcriptions
             if (msg.serverContent?.outputTranscription?.text) {
-               onLog({ role: 'model', text: msg.serverContent.outputTranscription.text, timestamp: new Date() });
+               currentOutputRef.current += msg.serverContent.outputTranscription.text;
             }
             if (msg.serverContent?.inputTranscription?.text) {
-               onLog({ role: 'user', text: msg.serverContent.inputTranscription.text, timestamp: new Date() });
+               currentInputRef.current += msg.serverContent.inputTranscription.text;
+            }
+
+            // Flush logs on turn complete
+            if (msg.serverContent?.turnComplete) {
+               if (currentInputRef.current.trim()) {
+                   onLog({ role: 'user', text: currentInputRef.current.trim(), timestamp: new Date() });
+                   currentInputRef.current = '';
+               }
+               if (currentOutputRef.current.trim()) {
+                   onLog({ role: 'model', text: currentOutputRef.current.trim(), timestamp: new Date() });
+                   currentOutputRef.current = '';
+               }
             }
 
             // Handle Audio Output
@@ -193,8 +221,17 @@ export const useLiveClient = ({ apiKey, systemInstruction, voiceName, onLog }: U
             // Handle Interruption
             if (msg.serverContent?.interrupted) {
                onLog({ role: 'system', text: 'Interruption detected', timestamp: new Date() });
+               
+               // Stop audio immediately
                activeSourcesRef.current.forEach(s => s.stop());
                activeSourcesRef.current.clear();
+               
+               // If there was partially spoken text, log it so we don't lose context
+               if (currentOutputRef.current.trim()) {
+                   onLog({ role: 'model', text: currentOutputRef.current.trim() + ' [Interrupted]', timestamp: new Date() });
+                   currentOutputRef.current = '';
+               }
+
                // Reset timing to now, so new audio plays immediately
                if (outputContextRef.current) {
                    nextStartTimeRef.current = outputContextRef.current.currentTime;

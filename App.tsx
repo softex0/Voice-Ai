@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLiveClient } from './hooks/useLiveClient';
 import { AudioStatus, LogMessage, Scenario, VoiceName } from './types';
 import { SCENARIOS, VOICES } from './constants';
@@ -11,12 +11,24 @@ export default function App() {
   const [logs, setLogs] = useState<LogMessage[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
   
-  // Environment variable check
-  const apiKey = process.env.API_KEY || '';
-
-  const handleLog = (message: LogMessage) => {
-    setLogs(prev => [...prev, message]);
+  // Safe environment variable check that won't crash in browser
+  const getApiKey = () => {
+    try {
+      // Handle standard bundler (Vite/Webpack) environment variables
+      if (typeof process !== 'undefined' && process.env?.API_KEY) {
+        return process.env.API_KEY;
+      }
+    } catch (e) {
+      console.warn('Error reading env vars:', e);
+    }
+    return '';
   };
+
+  const apiKey = getApiKey();
+
+  const handleLog = useCallback((message: LogMessage) => {
+    setLogs(prev => [...prev, message]);
+  }, []);
 
   const { connect, disconnect, status, isUserSpeaking, isModelSpeaking, volume } = useLiveClient({
     apiKey,
@@ -48,8 +60,8 @@ export default function App() {
             <div className="max-w-md text-center border border-red-500/50 bg-red-900/20 p-8 rounded-2xl">
                 <h1 className="text-2xl font-bold text-red-400 mb-4">API Key Missing</h1>
                 <p className="text-slate-300">
-                    Could not find <code>process.env.API_KEY</code>. <br/>
-                    Please configure your environment variables to use the Gemini API.
+                    Could not find <code>API_KEY</code> in environment variables. <br/>
+                    Please configure your <code>.env</code> file or build configuration.
                 </p>
             </div>
         </div>
