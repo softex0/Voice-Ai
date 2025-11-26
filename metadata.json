@@ -1,0 +1,7 @@
+{
+  "name": "Gemini Cold Call Simulator",
+  "description": "A high-fidelity AI voice assistant simulator for training cold calling scenarios using Gemini Live API with real-time interruption handling.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
